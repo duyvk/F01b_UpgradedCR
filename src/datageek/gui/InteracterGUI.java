@@ -13,7 +13,8 @@ import org.omg.CORBA.FREE_MEM;
 import datageek.entity.Category;
 import datageek.entity.Item;
 import datageek.entity.User;
-import datageek.upgrade.datapreparing.UserInforGenertor_v2;
+import datageek.upgrade.datapreparing.UserInforGenertor;
+import datageek.util.Sorter;
 
 /**
  * The interface implementation for interact with GUI
@@ -22,13 +23,17 @@ import datageek.upgrade.datapreparing.UserInforGenertor_v2;
  */
 public class InteracterGUI {
 	
-	final double RECOMMEND_THRESHOLD = 0.2;
+	final double RECOMMEND_THRESHOLD = 0.01;
+	final double LON_BIAS = 0.005;
+	final double LAT_BIAS = 0.005;
 	
-	final  String fNewCoupon = "data/upgrade/new-coupons.txt";
-	final  String fOldCoupon = "data/upgrade/old-coupons.txt";
+	
+	final  String fNewCoupon = "data/upgrade/deals-new.txt";
+	final  String fOldCoupon = "data/upgrade/deals-old.txt";
+	final  String fCoupon = "data/upgrade/deals.txt";
 	
 	final  String fUser = "data/upgrade/user";
-	final  String fCoupon = "data/upgrade/deals.txt";
+	
 	
 	final  String fUserCoupon = "data/upgrade/user-coupon.txt";
 	final  String fUserFriend = "data/upgrade/user-friend.txt";
@@ -36,7 +41,8 @@ public class InteracterGUI {
 	final String fCategory = "data/upgrade/categories.txt";
 	final String fCouponCategory = "data/upgrade/coupon-category.txt";
 	
-	//final  int userID = 1; //user for testing
+	final  int userID; //userid in session
+	
 	ArrayList<Item> newCoupons = new ArrayList<Item>();
 	ArrayList<Item> oldCoupons = new ArrayList<Item>();
 	ArrayList<Item> allCoupons = new ArrayList<Item>();
@@ -45,16 +51,30 @@ public class InteracterGUI {
 	
 	User testUser;
 	
-	public InteracterGUI() throws IOException, JSONException {
-		UserInforGenertor_v2 uig = new UserInforGenertor_v2();
+	/**
+	 * Constructor with user id pass by log in gui
+	 * @param _userID
+	 * @throws IOException
+	 * @throws JSONException
+	 */
+	public InteracterGUI(int _userID) throws IOException, JSONException {
+		UserInforGenertor uig = new UserInforGenertor();
 		userList = uig.loadUser(new File(fUser));
 		allCoupons = uig.loadCoupon(new File(fCoupon));
 		categoryList = uig.loadCategory(new File(fCategory));
 		oldCoupons = uig.loadCoupon(new File(fOldCoupon));
 		
 		initData();
+		this.userID = _userID;
+		testUser = getUser(userID);
+		System.out.println("lon: " + testUser.getLon());
+		System.out.println("lat: " + testUser.getLat());
 	}
 	
+	/**
+	 * Read data of engine from files
+	 * @throws FileNotFoundException
+	 */
 	public void initData() throws FileNotFoundException {
 			
 		for(User u : userList) {
@@ -74,7 +94,7 @@ public class InteracterGUI {
 					if(Integer.parseInt(lines[0]) == uID) {
 						for(Item i : allCoupons) {
 							if(i.getDeal().get("id").compareTo(lines[1]) == 0) {
-								testUser.getCouponChooseList().put(i, 1.0);	
+								u.getCouponChooseList().put(i, 1.0);	
 							}
 							
 						}
@@ -88,17 +108,19 @@ public class InteracterGUI {
 				String line= inUserFriend.nextLine();
 				if(line.isEmpty() == false) {
 					String[] lines = line.split("\\|");
-					if(Integer.parseInt(lines[0]) == uID) {
-						String[] friends = lines[1].split(";");
-						for(String f : friends) {
-							for(User uf : userList) {
-								if(uf.getId() == Integer.parseInt(f)) {
-									u.getFriendList().put(uf, 1.0);
+					if(lines.length >= 2) {
+						if(Integer.parseInt(lines[0]) == uID) {
+							String[] friends = lines[1].split(";");
+							for(String f : friends) {
+								for(User uf : userList) {
+									if(uf.getId() == Integer.parseInt(f)) {
+										u.getFriendList().put(uf, 1.0);
+									}
 								}
+								
 							}
 							
 						}
-						
 					}
 				}
 			}
@@ -138,11 +160,14 @@ public class InteracterGUI {
 	
 	//Step 2: read new coupon
 	public void readNewCoupon() {
-		UserInforGenertor_v2 uig = new UserInforGenertor_v2();
+		UserInforGenertor uig = new UserInforGenertor();
 		newCoupons = uig.loadCoupon(new File(fNewCoupon));
 	}
 	
-	// Return true if user has history
+	/**
+	 * Check user history
+	 * @return true if user history is not empty
+	 */
 	public boolean checkUserHistory() {
 		return testUser.getCategoryChooseList().size() > 0;
 	}
@@ -173,50 +198,72 @@ public class InteracterGUI {
 			double interestCategoryOfFriend = 0.0;	
 			for(User u : testUser.getFriendList().keySet()) {
 				int total = 0;
+				
 				for(Item i : u.getCouponChooseList().keySet()) {
-					for(Item j : c.getCouponList()) {
-						if(i.getDeal().get("id").compareTo(j.getDeal().get("id"))==0) {
-							total++;
-						}
+					if(Integer.parseInt(i.deal.get("categoryID")) == c.getId()){
+						total++;
 					}
 				}
 				
+				//System.out.println("---------------X: " + u.getCategoryChooseList().get(c) +"*" + total);
 				interestCategoryOfFriend += u.getCategoryChooseList().get(c) * total;
 			}	
 			
 			scores.put(c, interestCategoryOfFriend);
 			
+			
 			//Map newscoupon into category list
+			//MUST DEBUG
 			ArrayList<Item> tmp = new ArrayList<Item>();
+			System.out.println("size of newcoupons: " + newCoupons.size());
 			for(Item i : newCoupons) {
-				for(Item j:c.getCouponList()) {
-					if(i.getDeal().get("id").compareTo(j.getDeal().get("id"))==0) {
-						tmp.add(i);
+				if(Integer.parseInt(i.deal.get("categoryID")) == c.getId()) {
+					tmp.add(i);
+				}
+			}
+			newCouponInCategory.put(c, tmp);
+			
+		}
+		
+		//Sort by score
+		//HashMap<Category, Double> scoresSorted = Sorter.sortHashMap(scores);
+		HashMap<Category, Double> scoresSorted = scores;
+
+		//String[]={“2”, “titlecoupon”, “coupon_expiration-2012-08-22”, “receivingDate-2012-08-19” }
+		for(Category c : scoresSorted.keySet()) {
+			if(scoresSorted.get(c) >= RECOMMEND_THRESHOLD) {
+				System.out.println("category " + c + ":" + scoresSorted.get(c));
+				//System.out.println("Mustcheckis, size of list coupons: " + newCouponInCategory.get(c).size());
+				for(Item i : newCouponInCategory.get(c)) {
+					double lonBias = Math.abs(Double.parseDouble(i.getMerchant().get("longitude"))-testUser.getLon());
+					double latBias = Math.abs(Double.parseDouble(i.getMerchant().get("latitude")) - testUser.getLat()); 
+					
+					if((lonBias <= LON_BIAS)
+						&&(latBias <= LAT_BIAS)) {
+						
+						System.out.println("Add it with lon = " + lonBias + "and lat = " + latBias);
+						String [] toAdd = {i.getDeal().get("id"), 
+								i.getDeal().get("title"),
+								i.deal.get("coupon_expiration"), 
+								i.deal.get("receivingDate"),
+								i.getMerchant().get("latitude"),
+								i.getMerchant().get("longitude")};
+						couponsForRecommend.add(toAdd);
 					}
 				}
 				
 			}
-			newCouponInCategory.put(c, tmp);
 		}
 		
-		//Sort here
-		
-		//Return
-		
-		//String[]={“2”, “titlecoupon”, “coupon_expiration-2012-08-22”, “receivingDate-2012-08-19” }
-		for(Category c : scores.keySet()) {
-			if(scores.get(c) >= RECOMMEND_THRESHOLD) {
-				for(Item i : newCouponInCategory.get(c)) {
-					String [] toAdd = {i.getDeal().get("id"), 
-										i.getDeal().get("title"),
-										i.deal.get("coupon_expiration"), 
-										i.deal.get("receivingDate")};
-					couponsForRecommend.add(toAdd);
-				}
-				
+		//PRINT
+		System.out.println("momo");
+		for(String[] x : couponsForRecommend) {
+			for(String s:x) {
+				System.out.print(s + "|");
 			}
+			System.out.println();
 		}
-		
+		System.out.println("end momo");
 		return couponsForRecommend;
 	}
 	
@@ -246,6 +293,7 @@ public class InteracterGUI {
 	public  void updateHistoricalData(ArrayList<Item> justChoose) {
 		for(Item i : justChoose) {
 			testUser.getCouponChooseList().put(i, 1.0);
+			
 		}
 	}
 	
@@ -289,7 +337,7 @@ public class InteracterGUI {
 		}
 		
 		while(numEachAdd > 0) {
-			int genNum = UserInforGenertor_v2.genIntegerInRange(userList.size()-1);
+			int genNum = UserInforGenertor.genIntegerInRange(userList.size()-1);
 			
 			if((beFriend.contains(genNum) == false) && (gented.contains(genNum) == false)) {
 				gented.add(genNum);

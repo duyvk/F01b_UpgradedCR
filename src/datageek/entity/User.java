@@ -35,6 +35,17 @@ public class User {
 	private String zipCode;
 
 	/**
+	 * Latitude
+	 */
+	private double lat;
+	
+	/**
+	 * Longtitude
+	 */
+	private double lon;
+	
+	
+	/**
 	 * Coupon choose list with coupon score 
 	 */
 	private HashMap<Item, Double> couponChooseList;
@@ -85,12 +96,29 @@ public class User {
 	 * @param _occupation
 	 * @param _zipcode
 	 */
+	public User(int _id, int _age, String _gender, String _occupation, String _zipcode, double _lon, double _lat) {
+		this.id = _id;
+		this.age = _age;
+		this.gender = _gender;
+		this.occupation = _occupation;
+		this.zipCode = _zipcode;
+		this.lon = _lon;
+		this.lat = _lat;
+		
+		couponChooseList = new HashMap<Item, Double>();
+		friendList = new HashMap<User, Double>();
+		categoryChooseList = new HashMap<Category, Double>();
+		likehoodFriendList = new HashMap<User, Double>();
+	}// End Constructor
+	
 	public User(int _id, int _age, String _gender, String _occupation, String _zipcode) {
 		this.id = _id;
 		this.age = _age;
 		this.gender = _gender;
 		this.occupation = _occupation;
 		this.zipCode = _zipcode;
+
+		
 		couponChooseList = new HashMap<Item, Double>();
 		friendList = new HashMap<User, Double>();
 		categoryChooseList = new HashMap<Category, Double>();
@@ -143,6 +171,22 @@ public class User {
 
 	public void setZipCode(String zipCode) {
 		this.zipCode = zipCode;
+	}
+	
+	public double getLat() {
+		return lat;
+	}
+
+	public void setLat(double lat) {
+		this.lat = lat;
+	}
+
+	public double getLon() {
+		return lon;
+	}
+
+	public void setLon(double lon) {
+		this.lon = lon;
 	}
 	
 	public HashMap<Item, Double> getCouponChooseList() {

@@ -8,18 +8,14 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.text.Format;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.HashMap;
-import java.util.List;
-import java.util.ListIterator;
-import java.util.Map;
+
 import java.util.Random;
 import java.util.Scanner;
 import java.util.Set;
-import java.util.TreeMap;
+
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -29,7 +25,7 @@ import datageek.entity.Category;
 import datageek.entity.Item;
 import datageek.entity.User;
 
-public class UserInforGenertor_v2 {
+public class UserInforGenertor {
 	// Constant for friendship modeling
 	final double A_THRESHOLD = 0.5;
 	final double K_LIKEHOOD = 0.7;
@@ -93,13 +89,22 @@ public class UserInforGenertor_v2 {
 				}else {
 					//1|24|M|technician|85711
 					String[] userPropertises = line.split("\\|");
+					
 					User newUser = new User(Integer.parseInt(userPropertises[0]),
 											Integer.parseInt(userPropertises[1]),
 											userPropertises[2], userPropertises[3],
-											userPropertises[4]);
+											userPropertises[4], 
+											Double.parseDouble(userPropertises[5]), 
+											Double.parseDouble(userPropertises[6]));
+					/*User newUser = new User(Integer.parseInt(userPropertises[0]),
+									Integer.parseInt(userPropertises[1]),
+									userPropertises[2], userPropertises[3],
+									userPropertises[4]);*/
+							
 					userList.add(newUser);
 				}
 			}
+			in.close();
 		} catch (FileNotFoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -513,18 +518,97 @@ public class UserInforGenertor_v2 {
 	
 	
 	/**
-	 * @param args
+	 * Runner
 	 * @throws JSONException 
 	 * @throws IOException 
 	 */
-	public static void main(String[] args) throws IOException, JSONException {
-		// TODO Auto-generated method stub
+	public static void runner() throws IOException, JSONException {
 		File userFile = new File("data/upgrade/user");
 		File categoryFile = new File("data/upgrade/categories.txt");
 		File couponFile = new File("data/upgrade/deals.txt");
 		
 		
-		UserInforGenertor_v2 one = new UserInforGenertor_v2();
+		UserInforGenertor one = new UserInforGenertor();
+		
+		//LOAD DATA
+		one.loadUser(userFile);
+		one.loadCategory(categoryFile);
+		one.loadCoupon(couponFile);
+		
+		//GEN DATA
+		one.genFriendForUsers();
+		one.genInterestScores();
+		one.getCouponListForCategory();
+		one.genCouponForUsers();
+		
+		//WRITE DOWN FILE
+		File fUserGraph = new File("data/upgrade/user-friend.txt");
+		PrintWriter outUserFriend = new PrintWriter(fUserGraph);
+		for(User u : one.getUserList()) {
+			outUserFriend.println(one.formatUserFriend(u));
+		}
+		outUserFriend.close();
+		
+		
+		File fUserCoupon = new File("data/upgrade/user-coupon.txt");
+		PrintWriter outUserCoupon = new PrintWriter(fUserCoupon);
+		for(User u : one.getUserList()) {
+			outUserCoupon.println(one.formatUserCouponHistory(u));
+		}
+		outUserCoupon.close();
+		
+		
+		File fOldCoupon = new File("data/upgrade/old-coupons.txt");
+		PrintWriter outOldCoupon = new PrintWriter(fOldCoupon);
+		for(Item i: one.getCouponList()) {
+			outOldCoupon.println(one.formatCoupon(i));	
+		}
+		outOldCoupon.close();
+		
+		
+		File fUserCate = new File("data/upgrade/user-cate.txt");
+		PrintWriter outUserCate = new PrintWriter(fUserCate);
+		
+		for(User u : one.getUserList()) {
+			for(Category c : u.getCategoryChooseList().keySet()) {
+				outUserCate.println(u.getId() + "|" + c.getId() + "|" +u.getCategoryChooseList().get(c));
+			}
+		}
+		
+		outUserCate.close();
+		
+		//1|2
+		//1|3
+		//1|4
+		File fCouponCategory = new File("data/upgrade/coupon-category.txt");
+		PrintWriter outCouponCategory = new PrintWriter(fCouponCategory);
+		
+		for(Category c : one.getCategoryList()) {
+			
+			for(Item i : c.getCouponList()) {
+				outCouponCategory.println(c.getId() + "|" + i.getDeal().get("id"));
+			}
+		}
+		
+		outCouponCategory.close();
+
+	}
+	
+	
+	/**
+	 * @param args
+	 * @throws JSONException 
+	 * @throws IOException 
+	 */
+	public static void main(String[] args) throws IOException, JSONException {
+		runner();
+		
+/*		File userFile = new File("data/upgrade/user");
+		File categoryFile = new File("data/upgrade/categories.txt");
+		File couponFile = new File("data/upgrade/deals.txt");
+		
+		
+		UserInforGenertor one = new UserInforGenertor();
 		one.loadUser(userFile);
 		one.loadCategory(categoryFile);
 		one.loadCoupon(couponFile);
@@ -535,7 +619,7 @@ public class UserInforGenertor_v2 {
 		one.genCouponForUsers();
 		
 		
-/*		File outFile = new File("data/upgrade/usergraph.txt");
+		File outFile = new File("data/upgrade/usergraph.txt");
 		PrintWriter out = new PrintWriter(outFile);
 		for(User u : one.getUserList()) {
 			out.println("User ID:" + u.getId());
@@ -554,7 +638,7 @@ public class UserInforGenertor_v2 {
 			out1.println("------------------------------------------------------");
 		}
 		out1.close();
-*/
+
 		File fUserGraph = new File("data/upgrade/user-friend.txt");
 		PrintWriter outUserFriend = new PrintWriter(fUserGraph);
 		for(User u : one.getUserList()) {
@@ -585,14 +669,14 @@ public class UserInforGenertor_v2 {
 		outOldCoupon.close();
 		
 		
-/*		File fNewCoupon = new File("data/upgrade/new-coupons.txt");
+		File fNewCoupon = new File("data/upgrade/new-coupons.txt");
 		PrintWriter outNewCoupon = new PrintWriter(fNewCoupon);
 		
 		ArrayList<Item> newcoupon = one.loadCoupon(new File("data/upgrade/deals-new.txt"));
 		for(Item i: newcoupon) {
 			outNewCoupon.println(one.formatCoupon(i));	
 		}
-		outNewCoupon.close();*/
+		outNewCoupon.close();
 		
 		
 		File fUserCate = new File("data/upgrade/user-cate.txt");
@@ -627,7 +711,7 @@ public class UserInforGenertor_v2 {
 		
 		String x= "132;351;667;756;";
 		String[] xa = x.split(";");
-		System.out.println("length : " + xa.length);
+		System.out.println("length : " + xa.length);*/
 	}
 }
 
